@@ -31,6 +31,7 @@ body{background:var(--sky-bot);color:var(--ink);font-family:var(--body);font-siz
 header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-family:var(--display);font-weight:600;font-size:20px;margin:0}
 .link{background:none;border:0;color:var(--ink);font:500 14px var(--body);padding:6px 2px;border-bottom:1.5px solid var(--line);cursor:pointer}
+.link[aria-pressed="true"],.link.on{border-bottom-color:currentColor}
 .panel{grid-column:1;grid-row:2;display:flex;flex-direction:column;justify-content:center;gap:14px;min-width:0}
 #stage{grid-column:2;grid-row:2;min-height:0}
 .phase{font:500 15px var(--display);color:var(--ink-soft);margin:0;min-height:1.5em}
@@ -146,6 +147,7 @@ header,.fade{transition:opacity .9s}
     <h1 class="brand" data-en="Focus-en-Cordee">Focus-en-Cordee</h1>
     <div class="group">
       <button class="link" id="closeup" aria-pressed="false"></button>
+      <button class="link" id="spinBtn" aria-expanded="false" data-en="Spin">หมุน</button>
       <button class="link" id="viewBtn" aria-expanded="false" data-en="View">มุมมอง</button>
       <button class="link" id="charBtn" aria-expanded="false" data-en="Character">ตัวละคร</button>
       <button class="link" id="langBtn" lang="en">EN</button>
@@ -224,6 +226,14 @@ header,.fade{transition:opacity .9s}
   <div class="chips" id="viewRow" role="group" aria-label="มุมมอง" data-en-aria="View"></div>
   <div class="field"><span data-en="Zoom">ซูม</span><span class="chips"><button class="chip" id="zOut" aria-label="ซูมออก">−</button><button class="chip" id="zIn" aria-label="ซูมเข้า">+</button><button class="chip" id="zReset" data-en="Reset">รีเซ็ต</button></span></div>
   <p class="note" data-en="Scroll or pinch to zoom. Drag to look around. Right-drag, Shift-drag or two fingers to move. Double-click to reset.">เลื่อนล้อเมาส์หรือจีบนิ้วเพื่อซูม ลากเพื่อหมุนดู คลิกขวาลาก กด Shift ลาก หรือใช้สองนิ้วเพื่อเลื่อนฉาก ดับเบิลคลิกเพื่อรีเซ็ต</p>
+</aside>
+
+<aside id="spin" class="pop" hidden aria-label="หมุนเกาะ" data-en-aria="Spin the island">
+  <h2 data-en="Spin the island">หมุนเกาะ</h2>
+  <div class="field"><span data-en="Auto spin">หมุนอัตโนมัติ</span><button class="chip" id="spinOn" aria-pressed="false"></button></div>
+  <label class="field" for="spinSpeed"><span data-en="Speed">ความเร็ว</span><input type="range" id="spinSpeed" min="0" max="11" step="1"></label>
+  <p class="note" id="spinVal" aria-live="polite"></p>
+  <p class="note" data-en="Slide left for slower, right for faster. Dragging the island pauses the spin.">เลื่อนซ้ายช้าลง เลื่อนขวาเร็วขึ้น ลากเกาะเมื่อไหร่จะหยุดหมุนชั่วคราว</p>
 </aside>
 
 <aside id="chars" class="pop" hidden aria-label="เลือกตัวละคร" data-en-aria="Choose a character">
@@ -801,6 +811,7 @@ function drawFrame(now){const raw=(now-last)/1000;if(raw<1/31)return;last=now;co
  if(K.night>.6){const a=live.ff.geometry.attributes.position.array;live.ffD.forEach((q,i)=>{a[i*3]=q.x+Math.sin(t*.4+q.p)*.6;a[i*3+1]=q.y+Math.sin(t*.7+q.p)*.3;a[i*3+2]=q.z+Math.cos(t*.3+q.p)*.6});live.ff.geometry.attributes.position.needsUpdate=true}
  const wantZ=view.userZ||1,oldZ=view.z;view.z=lerp(view.z,wantZ,1-Math.exp(-dt*3));if(Math.abs(oldZ-view.z)>.0005)fit();
  const tg=[view.px,2.9+view.py,view.pz];view.tx=lerp(view.tx,tg[0],1-Math.exp(-dt*3));view.ty=lerp(view.ty,tg[1],1-Math.exp(-dt*3));view.tz=lerp(view.tz,tg[2],1-Math.exp(-dt*3));
+ if(store.spin&&!drag&&!view.follow)view.az+=dt*Math.PI*2/(spinMin()*60);
  view.az+=view.azV;view.azV*=.9;placeCam();
  if(tick3++%3===0)renderer.shadowMap.needsUpdate=true;
  peerTick(t,dt);
@@ -878,7 +889,7 @@ $('volAmb').value=store.ambV;$('volAmb').oninput=e=>{store.ambV=+e.target.value;
 function renderStats(){const d=today(),mins=Math.floor(d.m/10),H=mins/60|0;$('stToday').textContent=fmtMin(mins);$('stRounds').textContent=d.s+tr(' รอบ','');$('stPeaks').textContent=store.peaks+tr(' ครั้ง','');
  const days=[],thai=tr(['อา','จ','อ','พ','พฤ','ศ','ส'],['Su','Mo','Tu','We','Th','Fr','Sa']);for(let i=6;i>=0;i--){const x=new Date();x.setDate(x.getDate()-i);days.push([thai[x.getDay()],store.days[dayKey(x)]?.m||0])}
  const mx=Math.max(...days.map(a=>a[1]),300);$('stBars').innerHTML=days.map(([n,m])=>`<div title="${Math.floor(m/10)}${tr(' นาที',' min')}"><i style="height:${Math.round(m/mx*62)}px"></i>${n}</div>`).join('')}
-const POPS={views:'viewBtn',stats:'statsBtn',mix:'mixBtn',chars:'charBtn',party:'partyBtn'},togglePop=id=>{for(const k in POPS){const open=k===id&&$(k).hidden;$(k).hidden=!open;$(POPS[k]).setAttribute('aria-expanded',String(open))}if(id==='stats'&&!$('stats').hidden)renderStats()};
+const POPS={views:'viewBtn',spin:'spinBtn',stats:'statsBtn',mix:'mixBtn',chars:'charBtn',party:'partyBtn'},togglePop=id=>{for(const k in POPS){const open=k===id&&$(k).hidden;$(k).hidden=!open;$(POPS[k]).setAttribute('aria-expanded',String(open))}if(id==='stats'&&!$('stats').hidden)renderStats()};
 $('statsBtn').onclick=()=>togglePop('stats');$('goalBtn').onclick=()=>togglePop('stats');$('mixBtn').onclick=()=>togglePop('mix');$('charBtn').onclick=()=>togglePop('chars');$('viewBtn').onclick=()=>togglePop('views');$('partyBtn').onclick=()=>togglePop('party');
 chipRow('charRow',()=>[['dao',tr('น้องแตงกวา นักเดินทาง','Tangkwa the hiker')],['bear',tr('พี่หมี หนุ่มออฟฟิศ','Bear the office guy')],['elf',tr('ไลลา เอลฟ์นักเดินป่า','Lyla the elf ranger')]],k=>store.char===k,k=>{store.char=k;if(glOK){live.setChar(k);live.f.wave=2.4}say(k==='elf'?tr('ไลลาพร้อมออกเดินแล้ว','Lyla is ready to set out'):k==='bear'?tr('พี่หมีมาแล้ว ลุยกัน','Bear here. Let\'s get to it.'):tr('น้องแตงกวาพร้อมเดินแล้ว','Tangkwa is ready to walk'))});
 chipRow('viewRow',()=>[['island',tr('ทั้งเกาะ','Island')],['buddy',tr('ตัวละคร','Character')],['bird',tr('นก','Bird')],['dragon',tr('มังกร','Dragon')],['deer',tr('กวาง','Deer')]],k=>(view.follow||'island')===k,k=>setView(k));
@@ -946,12 +957,18 @@ function panBy(dx,dy){const s=innerHeight/27/view.z,c=Math.cos(view.az),n=Math.s
 function resetView(){view.px=view.py=view.pz=0;view.userZ=1.2;view.az=Math.PI/4;view.el=.6155;setView('island')}
 const drawClose=()=>{const on=view.follow==='buddy';$('closeup').setAttribute('aria-pressed',String(on));$('closeup').textContent=on?tr('ทั้งเกาะ','Island'):tr('ซูมดูเพื่อน','Zoom')};
 $('closeup').onclick=()=>setView(view.follow==='buddy'?'island':'buddy');
+/* slow auto-rotate of the island; the slider picks minutes per full turn, slowest on the left */
+const SPINS=[60,45,30,20,15,10,8,6,4,3,2,1],spinMin=()=>SPINS[store.spinI??6]??8,
+ drawSpin=()=>{const on=!!store.spin;$('spinBtn').classList.toggle('on',on);$('spinOn').setAttribute('aria-pressed',String(on));$('spinOn').textContent=on?tr('เปิดอยู่','On'):tr('ปิดอยู่','Off');$('spinSpeed').value=store.spinI??6;$('spinVal').textContent=tr(`1 รอบ ใน ${spinMin()} นาที`,`1 turn every ${spinMin()} min`)};
+$('spinBtn').onclick=()=>togglePop('spin');
+$('spinOn').onclick=()=>{store.spin=!store.spin;save();drawSpin()};
+$('spinSpeed').oninput=e=>{store.spinI=+e.target.value;store.spin=true;save();drawSpin()};
 function applyLang(){const en=store.lang==='en';document.documentElement.lang=store.lang;
  document.querySelectorAll('[data-en]').forEach(el=>{if(el.dataset.th===undefined)el.dataset.th=el.innerHTML;el.innerHTML=en?el.dataset.en:el.dataset.th});
  document.querySelectorAll('[data-en-aria]').forEach(el=>{if(el.dataset.thAria===undefined)el.dataset.thAria=el.getAttribute('aria-label');el.setAttribute('aria-label',en?el.dataset.enAria:el.dataset.thAria)});
  $('task').placeholder=tr('รอบนี้จะทำอะไร','What are you working on?');
  $('langBtn').textContent=en?'ไทย':'EN';$('langBtn').lang=en?'th':'en';$('langBtn').setAttribute('aria-label',en?'เปลี่ยนเป็นภาษาไทย':'Switch to English');
- chipRows.forEach(f=>f());drawClose();drawFs();$('pipBtn').setAttribute('aria-label',tr('จอเล็กลอย ใช้ตอนอยู่หน้าอื่น','Mini window for other tabs'));$('pipBtn').title=$('pipBtn').getAttribute('aria-label');$('ptName').placeholder=tr('เช่น แพรว','e.g. Praew');drawParty();ptNote(PT.room?'share':'out');drawPlay();drawCtl();drawAlt();renderStats()}
+ chipRows.forEach(f=>f());drawClose();drawSpin();drawFs();$('pipBtn').setAttribute('aria-label',tr('จอเล็กลอย ใช้ตอนอยู่หน้าอื่น','Mini window for other tabs'));$('pipBtn').title=$('pipBtn').getAttribute('aria-label');$('ptName').placeholder=tr('เช่น แพรว','e.g. Praew');drawParty();ptNote(PT.room?'share':'out');drawPlay();drawCtl();drawAlt();renderStats()}
 $('langBtn').onclick=()=>{store.lang=store.lang==='en'?'th':'en';save();applyLang();say()};
 
 /* ---------- pointer + quiet mode + keys ---------- */
